@@ -136,7 +136,9 @@ def validate_folder_files_exist(
 
     actual_files = {f for f in sorted(os.listdir(folder)) if f.endswith(".mp4")}
     fps = int(description.split(" ")[-1])
-    expected_files = {f.replace("30FPS", f"{fps}FPS") for f in actual_files}
+    # Normalise the expected names to the target FPS before comparing, in case
+    # they were derived from the 30FPS naming convention.
+    expected_files = {f.replace("30FPS", f"{fps}FPS") for f in expected_files}
     missing_files = expected_files - actual_files
     if missing_files:
         raise FileNotFoundError(
@@ -144,6 +146,18 @@ def validate_folder_files_exist(
         )
 
     print(f"{description} folder is valid with all required files.")
+
+
+def generated_mask_file_name(video_file_name: str, fps: int) -> str:
+    """Map a generated-video filename to the binary-mask filename produced by
+    ``generate_binary_masks``.
+
+    Generated videos are named ``{id}_{view}_{scenario}.mp4`` (e.g.
+    ``0001_perspective-left_trimmed-lit-candle.mp4``), while the corresponding
+    masks are written as ``{id}_video-masks_{fps}FPS_{view}_take-1_{scenario}``.
+    """
+    file_id, view, scenario = video_file_name.split("_", 2)
+    return f"{file_id}_video-masks_{int(fps)}FPS_{view}_take-1_{scenario}"
 
 
 def get_video_duration(video_path):
@@ -605,7 +619,7 @@ if __name__ == "__main__":
             include_take_2=True,
         )
         expected_real_files = {
-            f.replace("testing-videos", "mask-videos") for f in expected_real_files
+            f.replace("testing-videos", "video-masks") for f in expected_real_files
         }
         binary_mask_real_folder = ensure_binary_mask_structure(
             input_folder=real_video_folder,
@@ -624,6 +638,9 @@ if __name__ == "__main__":
         expected_generated_files = validate_video_files(
             input_folder, args.descriptions_file, "", int(fps), include_take_2=False
         )
+        expected_generated_files = {
+            generated_mask_file_name(f, int(fps)) for f in expected_generated_files
+        }
 
         binary_mask_generated_folder = ensure_binary_mask_structure(
             input_folder=input_folder,
